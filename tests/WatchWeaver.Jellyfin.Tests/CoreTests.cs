@@ -1,4 +1,4 @@
-using System.Net;using WatchWeaver.Jellyfin.Capture;using WatchWeaver.Jellyfin.Delivery;using WatchWeaver.Jellyfin.Protocol;using WatchWeaver.Jellyfin.Queue;
+using System.Net;using Xunit;using WatchWeaver.Jellyfin.Capture;using WatchWeaver.Jellyfin.Delivery;using WatchWeaver.Jellyfin.Protocol;using WatchWeaver.Jellyfin.Queue;
 namespace WatchWeaver.Jellyfin.Tests;
 public sealed class CoreTests
 {
