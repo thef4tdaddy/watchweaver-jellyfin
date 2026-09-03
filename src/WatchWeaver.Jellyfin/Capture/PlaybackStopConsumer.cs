@@ -1,5 +1,5 @@
 using MediaBrowser.Controller.Events;
-using MediaBrowser.Controller.Events.Session;
+using MediaBrowser.Controller.Library;
 namespace WatchWeaver.Jellyfin.Capture;
 public sealed class PlaybackStopConsumer:IEventConsumer<PlaybackStopEventArgs>
 {
