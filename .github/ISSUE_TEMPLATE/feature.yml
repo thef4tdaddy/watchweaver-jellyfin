@@ -1,0 +1,25 @@
+name: Plugin feature request
+description: Suggest an improvement to Jellyfin capture, delivery, configuration, or packaging.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired behavior
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Jellyfin version and compatibility considerations
+  - type: textarea
+    id: delivery
+    attributes:
+      label: Delivery, duplicate, or privacy considerations

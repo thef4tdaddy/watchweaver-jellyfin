@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: WatchWeaver application issue
+    url: https://github.com/thef4tdaddy/watchweaver/issues/new/choose
+    about: Report receiver, web UI, Trakt, Letterboxd, Serializd, and WatchWeaver container problems in the main repository.
+  - name: Security vulnerability
+    url: https://github.com/thef4tdaddy/watchweaver-jellyfin/security/advisories/new
+    about: Privately report vulnerabilities. Never publish connection tokens, private history, or server details in an issue.
