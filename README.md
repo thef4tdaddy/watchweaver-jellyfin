@@ -2,6 +2,14 @@
 
 GPL-3.0-or-later Jellyfin plugin that sends completed movie and episode watches to WatchWeaver's durable protocol v1 receiver.
 
+## Install from the Jellyfin catalog
+
+In Jellyfin, open **Dashboard → Plugins → Repositories**, add a repository named **WatchWeaver**, and use:
+
+`https://thef4tdaddy.github.io/watchweaver-jellyfin/manifest.json`
+
+WatchWeaver will then appear in the plugin catalog and future compatible releases can be installed from Jellyfin without manually copying DLL files.
+
 ## Compatibility
 
 | Jellyfin | Runtime | Build property | Target ABI |

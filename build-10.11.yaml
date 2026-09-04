@@ -1,6 +1,6 @@
 name: "WatchWeaver"
 guid: "5f36de72-9df2-4a06-b5e7-d55fe8f50158"
-version: 1
+version: "0.1.0.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "thef4tdaddy"
