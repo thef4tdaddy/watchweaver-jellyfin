@@ -1,6 +1,6 @@
 name: "WatchWeaver"
 guid: "5f36de72-9df2-4a06-b5e7-d55fe8f50158"
-version: "0.1.0.0"
+version: "0.1.0.1"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "thef4tdaddy"
@@ -8,4 +8,4 @@ overview: "Durable watch-history delivery to WatchWeaver"
 description: "Sends selected users' completed movies and episodes to WatchWeaver."
 category: "General"
 artifacts: ["WatchWeaver.Jellyfin.dll"]
-changelog: "Initial protocol v1 implementation."
+changelog: "Fix manual Mark Watched capture."
