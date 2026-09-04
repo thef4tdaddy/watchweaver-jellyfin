@@ -51,8 +51,10 @@ jobs:
           sha256sum "public/$archive" > "public/$archive.sha256"
           timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           source_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/$archive"
+          changelog="$(sed -n 's/^changelog: *\"\([^\"]*\)\"/\1/p' src/WatchWeaver.Jellyfin/build.yaml)"
           jq -n \
             --arg checksum "$md5" \
+            --arg changelog "$changelog" \
             --arg source "$source_url" \
             --arg timestamp "$timestamp" \
             --arg version "${GITHUB_REF_NAME#v}" \
@@ -65,7 +67,7 @@ jobs:
               category: "General",
               versions: [{
                 version: $version,
-                changelog: "Initial beta: durable delivery, stable TV hierarchy, selected-user capture, and authenticated WatchWeaver connection testing.",
+                changelog: $changelog,
                 targetAbi: "10.11.0.0",
                 sourceUrl: $source,
                 checksum: $checksum,
