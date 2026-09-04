@@ -32,6 +32,6 @@ jobs:
       - name: Build installable Jellyfin package
         uses: oddstr13/jellyfin-plugin-repository-manager@9497a0a499416cc572ed2e07a391d9f943a37b4d
         with:
-          path: .
+          path: src/WatchWeaver.Jellyfin
           output: artifacts
           dotnet-target: net9.0
