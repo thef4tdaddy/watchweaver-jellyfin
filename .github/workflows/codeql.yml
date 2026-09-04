@@ -1,0 +1,28 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "41 7 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze C#
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "9.0.x"
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: csharp
+      - run: dotnet build src/WatchWeaver.Jellyfin/WatchWeaver.Jellyfin.csproj --configuration Release -p:JellyfinLine=10.11
+      - uses: github/codeql-action/analyze@v4

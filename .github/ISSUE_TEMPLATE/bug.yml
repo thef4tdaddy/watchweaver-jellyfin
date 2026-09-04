@@ -1,0 +1,60 @@
+name: Plugin bug report
+description: Report Jellyfin capture, delivery, installation, or configuration failures.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Remove WatchWeaver tokens, private viewing history, public hostnames, and other secrets before submitting.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include what you expected and whether Test connection succeeds.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. In Jellyfin …
+        2. In the WatchWeaver plugin …
+        3. Observe …
+    validations:
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: WatchWeaver plugin version
+      placeholder: 0.1.0.1
+    validations:
+      required: true
+  - type: input
+    id: jellyfin-version
+    attributes:
+      label: Jellyfin server version
+      placeholder: 10.11.x
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: WatchWeaver application version
+      placeholder: 0.1.0-beta.16
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted Jellyfin and WatchWeaver logs
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I removed connection tokens, credentials, private history, and identifying server details.
+          required: true
+        - label: The plugin connects to WatchWeaver over a private LAN/VPN.
+          required: true

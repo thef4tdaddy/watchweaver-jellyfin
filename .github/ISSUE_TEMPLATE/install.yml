@@ -1,0 +1,29 @@
+name: Installation or repository problem
+description: Report catalog, package, update, or compatibility problems.
+title: "[Install]: "
+labels: ["documentation"]
+body:
+  - type: input
+    id: jellyfin-version
+    attributes:
+      label: Jellyfin version
+    validations:
+      required: true
+  - type: input
+    id: repository-url
+    attributes:
+      label: Repository URL used
+      placeholder: https://thef4tdaddy.github.io/watchweaver-jellyfin/manifest.json
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What failed?
+      description: Include the catalog/plugin error without private server information.
+    validations:
+      required: true
+  - type: textarea
+    id: attempts
+    attributes:
+      label: What have you tried?
