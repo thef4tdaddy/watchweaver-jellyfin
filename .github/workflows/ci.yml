@@ -1,0 +1,37 @@
+name: ci
+on: [push, pull_request]
+permissions: { contents: read }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '9.0.x' }
+      - run: dotnet test tests/WatchWeaver.Jellyfin.Tests/WatchWeaver.Jellyfin.Tests.csproj --configuration Release
+      - run: dotnet build src/WatchWeaver.Jellyfin/WatchWeaver.Jellyfin.csproj --configuration Release -p:JellyfinLine=10.11
+  jellyfin-12-preview:
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '10.0.x' }
+      - run: dotnet build src/WatchWeaver.Jellyfin/WatchWeaver.Jellyfin.csproj --configuration Release -p:JellyfinLine=12.0
+  protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: grep -q '/api/v1/ingest/jellyfin/events' docs/protocol-v1.md
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '9.0.x' }
+      - name: Build installable Jellyfin package
+        uses: oddstr13/jellyfin-plugin-repository-manager@9497a0a499416cc572ed2e07a391d9f943a37b4d
+        with:
+          path: src/WatchWeaver.Jellyfin
+          output: artifacts
+          dotnet-target: net9.0

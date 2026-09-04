@@ -1,0 +1,89 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*.*"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: jellyfin-plugin-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - name: Verify release version
+        run: |
+          expected="${GITHUB_REF_NAME#v}"
+          actual="$(sed -n 's/^version: *\"\([^\"]*\)\"/\1/p' src/WatchWeaver.Jellyfin/build.yaml)"
+          test "$expected" = "$actual"
+      - name: Test
+        run: dotnet test tests/WatchWeaver.Jellyfin.Tests/WatchWeaver.Jellyfin.Tests.csproj --configuration Release
+      - name: Package for Jellyfin 10.11
+        id: package
+        uses: oddstr13/jellyfin-plugin-repository-manager@9497a0a499416cc572ed2e07a391d9f943a37b4d
+        with:
+          path: src/WatchWeaver.Jellyfin
+          output: artifacts
+          dotnet-target: net9.0
+      - name: Prepare release files and catalog
+        env:
+          ARTIFACT: ${{ steps.package.outputs.artifact }}
+        run: |
+          mkdir -p public
+          archive="WatchWeaver_${GITHUB_REF_NAME#v}.zip"
+          cp "$ARTIFACT" "public/$archive"
+          md5="$(md5sum "public/$archive" | cut -d' ' -f1)"
+          sha256sum "public/$archive" > "public/$archive.sha256"
+          timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          source_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/$archive"
+          jq -n \
+            --arg checksum "$md5" \
+            --arg source "$source_url" \
+            --arg timestamp "$timestamp" \
+            --arg version "${GITHUB_REF_NAME#v}" \
+            '[{
+              guid: "5f36de72-9df2-4a06-b5e7-d55fe8f50158",
+              name: "WatchWeaver",
+              description: "Durably sends selected users’ completed movie and episode watches to a private-network WatchWeaver server.",
+              overview: "Connect Jellyfin watch history to WatchWeaver",
+              owner: "thef4tdaddy",
+              category: "General",
+              versions: [{
+                version: $version,
+                changelog: "Initial beta: durable delivery, stable TV hierarchy, selected-user capture, and authenticated WatchWeaver connection testing.",
+                targetAbi: "10.11.0.0",
+                sourceUrl: $source,
+                checksum: $checksum,
+                timestamp: $timestamp
+              }]
+            }]' > public/manifest.json
+      - name: Attest package
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: public/WatchWeaver_*.zip
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" public/WatchWeaver_*.zip public/WatchWeaver_*.sha256 --verify-tag --title "WatchWeaver Jellyfin $GITHUB_REF_NAME" --notes "Install or update through the WatchWeaver Jellyfin plugin repository. Supports Jellyfin 10.11.x and WatchWeaver protocol v1."
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - name: Deploy catalog
+        id: pages
+        uses: actions/deploy-pages@v4

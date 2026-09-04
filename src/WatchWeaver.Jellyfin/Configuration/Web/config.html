@@ -1,0 +1,11 @@
+<div id="WatchWeaverConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+  <div data-role="content"><div class="content-primary"><form id="WatchWeaverConfigForm">
+    <h2>WatchWeaver</h2><p>Selected Jellyfin users feed the same WatchWeaver history.</p>
+    <div class="inputContainer"><label class="inputLabel" for="WatchWeaverUrl">WatchWeaver URL</label><input is="emby-input" id="WatchWeaverUrl" type="url" required /></div>
+    <div class="inputContainer"><label class="inputLabel" for="ConnectionToken">Connection token</label><input is="emby-input" id="ConnectionToken" type="password" autocomplete="new-password" placeholder="Leave blank to keep the saved token" /><div id="SavedTokenStatus" class="fieldDescription">Checking saved token…</div></div>
+    <div class="verticalSection"><h3 class="sectionTitle">Users to sync</h3><div id="AllowedUsers"></div><div class="fieldDescription">Only completed watches from selected users are sent. Select no users to pause capture.</div></div>
+    <button is="emby-button" type="submit" class="raised button-submit block"><span>Save</span></button>
+    <button is="emby-button" type="button" id="TestConnection" class="raised block"><span>Test connection</span></button>
+    <pre id="WatchWeaverStatus" aria-live="polite"></pre>
+  </form></div></div><script type="text/javascript" src="configurationpage?name=watchweaverjs"></script>
+</div>
