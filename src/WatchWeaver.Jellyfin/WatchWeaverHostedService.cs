@@ -17,6 +17,7 @@ public sealed class WatchWeaverHostedService : BackgroundService
     private readonly IServerApplicationHost _host; private readonly IApplicationPaths _paths;
     private readonly IUserDataManager _userData; private readonly IUserManager _users;
     private readonly ILogger<WatchWeaverHostedService> _log; private readonly EventCorrelation _correlation;
+    private readonly SemaphoreSlim _wake = new(0, 1);
     private OutboundQueue? _queue; private Dispatcher? _dispatcher;
     public static WatchWeaverHostedService? Instance { get; private set; }
     public WatchWeaverHostedService(IServerApplicationHost host,IApplicationPaths paths,IUserDataManager userData,IUserManager users,EventCorrelation correlation,ILogger<WatchWeaverHostedService> log)
@@ -25,7 +26,7 @@ public sealed class WatchWeaverHostedService : BackgroundService
     { var folder=Path.Combine(_paths.PluginConfigurationsPath,"watchweaver");_queue=new(Path.Combine(folder,"outbound-queue.json"),Plugin.Instance?.Configuration.QueueCapacity??10000);await _queue.LoadAsync(ct);_dispatcher=new(new HttpClient{Timeout=TimeSpan.FromSeconds(20)},_queue,Configuration);_userData.UserDataSaved+=OnUserDataSaved;await base.StartAsync(ct); }
     public override Task StopAsync(CancellationToken ct){_userData.UserDataSaved-=OnUserDataSaved;return base.StopAsync(ct);}
     protected override async Task ExecuteAsync(CancellationToken ct)
-    { while(!ct.IsCancellationRequested){try{if(_dispatcher is null||!await _dispatcher.DeliverOneAsync(DateTimeOffset.UtcNow,ct))await Task.Delay(TimeSpan.FromSeconds(5),ct);}catch(OperationCanceledException)when(ct.IsCancellationRequested){break;}catch(Exception ex){_log.LogWarning(ex,"WatchWeaver delivery cycle failed without exposing event data");await Task.Delay(TimeSpan.FromSeconds(15),ct);}} }
+    { while(!ct.IsCancellationRequested){try{if(_dispatcher is null||!await _dispatcher.DeliverOneAsync(DateTimeOffset.UtcNow,ct))await _wake.WaitAsync(TimeSpan.FromSeconds(5),ct);}catch(OperationCanceledException)when(ct.IsCancellationRequested){break;}catch(Exception ex){_log.LogWarning(ex,"WatchWeaver delivery cycle failed without exposing event data");await Task.Delay(TimeSpan.FromSeconds(15),ct);}} }
     private void OnUserDataSaved(object? sender,UserDataSaveEventArgs e)
     { try{var user=_users.GetUserById(e.UserId);if(e.Item is not null&&user is not null&&e.UserData.Played&&e.SaveReason.ToString().Contains("UpdateUserRating",StringComparison.OrdinalIgnoreCase))Capture(e.Item,user,null,_correlation,"marked_played");}catch(Exception ex){_log.LogWarning(ex,"WatchWeaver manual watched-state capture failed");} }
     public async void Capture(BaseItem item,global::Jellyfin.Database.Implementations.Entities.User user,SessionInfo? session,EventCorrelation correlation,string type)
@@ -41,6 +42,7 @@ public sealed class WatchWeaverHostedService : BackgroundService
             var progress=runtime>0?100d*data.PlaybackPositionTicks/runtime:data.Played?100:0;
             var envelope=new EventEnvelope(1,eventId,type,now,new(_host.SystemId,_host.ApplicationVersionString),new(typeof(Plugin).Assembly.GetName().Version?.ToString()??"0.1.0",TargetAbi()),new(user.Id.ToString(),user.Username),BuildItem(item,user,now),new(true,data.PlaybackPositionTicks,item.RunTimeTicks,progress,data.PlayCount,session?.Client,session?.DeviceName));
             if(!await queue.EnqueueAsync(envelope))_log.LogError("WatchWeaver outbound queue is full; event was not accepted into the queue");
+            else if(_wake.CurrentCount==0)_wake.Release();
         }
         catch(Exception ex){_log.LogWarning(ex,"WatchWeaver event capture failed without exposing event data");}
     }
