@@ -3,6 +3,7 @@ using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Controller.Entities.TV;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WatchWeaver.Jellyfin.Capture;
@@ -28,7 +29,44 @@ public sealed class WatchWeaverHostedService : BackgroundService
     private void OnUserDataSaved(object? sender,UserDataSaveEventArgs e)
     { try{var user=_users.GetUserById(e.UserId);if(e.Item is not null&&user is not null&&e.UserData.Played&&e.SaveReason.ToString().Contains("UpdateUserRating",StringComparison.OrdinalIgnoreCase))Capture(e.Item,user,null,_correlation,"marked_played");}catch(Exception ex){_log.LogWarning(ex,"WatchWeaver manual watched-state capture failed");} }
     public async void Capture(BaseItem item,global::Jellyfin.Database.Implementations.Entities.User user,SessionInfo? session,EventCorrelation correlation,string type)
-    { try{var cfg=Plugin.Instance?.Configuration;var queue=_queue;if(cfg is null||queue is null||!cfg.AllowedUserIds.Contains(user.Id.ToString(),StringComparer.OrdinalIgnoreCase))return;var data=_userData.GetUserData(user,item);if(data is null)return;var now=DateTimeOffset.UtcNow;var eventId=correlation.GetEventId(_host.SystemId,user.Id.ToString(),item.Id.ToString(),data.PlayCount,now,type);var episode=item as MediaBrowser.Controller.Entities.TV.Episode;var providers=(item.ProviderIds??new Dictionary<string,string>()).Where(x=>x.Value is not null).ToDictionary(x=>x.Key.ToLowerInvariant(),x=>x.Value!);var runtime=item.RunTimeTicks.GetValueOrDefault();var progress=runtime>0?100d*data.PlaybackPositionTicks/runtime:data.Played?100:0;var envelope=new EventEnvelope(1,eventId,type,now,new(_host.SystemId,_host.ApplicationVersionString),new(typeof(Plugin).Assembly.GetName().Version?.ToString()??"0.1.0",TargetAbi()),new(user.Id.ToString(),user.Username),new(item.Id.ToString(),episode is null?"movie":"episode",item.Name??"Unknown",item.ProductionYear,episode?.SeriesName,episode?.ParentIndexNumber,episode?.IndexNumber,providers),new(true,data.PlaybackPositionTicks,item.RunTimeTicks,progress,data.PlayCount,session?.Client,session?.DeviceName));if(!await queue.EnqueueAsync(envelope))_log.LogError("WatchWeaver outbound queue is full; event was not accepted into the queue");}catch(Exception ex){_log.LogWarning(ex,"WatchWeaver event capture failed without exposing event data");} }
+    {
+        try
+        {
+            var cfg=Plugin.Instance?.Configuration;var queue=_queue;
+            if(cfg is null||queue is null||!cfg.AllowedUserIds.Contains(user.Id.ToString(),StringComparer.OrdinalIgnoreCase))return;
+            var data=_userData.GetUserData(user,item);if(data is null)return;
+            var now=DateTimeOffset.UtcNow;
+            var eventId=correlation.GetEventId(_host.SystemId,user.Id.ToString(),item.Id.ToString(),data.PlayCount,now,type);
+            var runtime=item.RunTimeTicks.GetValueOrDefault();
+            var progress=runtime>0?100d*data.PlaybackPositionTicks/runtime:data.Played?100:0;
+            var envelope=new EventEnvelope(1,eventId,type,now,new(_host.SystemId,_host.ApplicationVersionString),new(typeof(Plugin).Assembly.GetName().Version?.ToString()??"0.1.0",TargetAbi()),new(user.Id.ToString(),user.Username),BuildItem(item,user,now),new(true,data.PlaybackPositionTicks,item.RunTimeTicks,progress,data.PlayCount,session?.Client,session?.DeviceName));
+            if(!await queue.EnqueueAsync(envelope))_log.LogError("WatchWeaver outbound queue is full; event was not accepted into the queue");
+        }
+        catch(Exception ex){_log.LogWarning(ex,"WatchWeaver event capture failed without exposing event data");}
+    }
+    private ItemInfo BuildItem(BaseItem item,global::Jellyfin.Database.Implementations.Entities.User user,DateTimeOffset now)
+    {
+        var providers=ProviderIds(item);
+        if(item is not Episode episode)return new(item.Id.ToString(),"movie",item.Name??"Unknown",item.ProductionYear,ProviderIds:providers);
+        var series=episode.Series;var season=episode.Season;
+        var seriesId=episode.SeriesId==Guid.Empty?episode.FindSeriesId():episode.SeriesId;
+        var seasonId=episode.SeasonId==Guid.Empty?episode.FindSeasonId():episode.SeasonId;
+        var inventory=season is null?null:BuildSeasonInventory(season.GetEpisodes().OfType<Episode>(),user,now);
+        return new(episode.Id.ToString(),"episode",episode.Name??"Unknown",episode.ProductionYear,episode.SeriesName,
+            seriesId==Guid.Empty?null:seriesId.ToString(),seasonId==Guid.Empty?null:seasonId.ToString(),episode.ParentIndexNumber,episode.IndexNumber,
+            providers,series is null?null:ProviderIds(series),season is null?null:ProviderIds(season),
+            SeasonEpisodeCount:inventory?.ReleasedCount,SeasonWatchedEpisodeCount:inventory?.WatchedReleasedCount,
+            SeasonFutureEpisodeCount:inventory?.FutureCount,LatestReleasedEpisodeNumber:inventory?.LatestReleasedEpisodeNumber);
+    }
+    private SeasonInventory BuildSeasonInventory(IEnumerable<Episode> episodes,global::Jellyfin.Database.Implementations.Entities.User user,DateTimeOffset now)
+    {
+        var observations=episodes.Where(x=>x.IndexNumber is >0).Select(x=>new SeasonEpisodeObservation(
+            x.IndexNumber!.Value,x.PremiereDate.HasValue&&x.PremiereDate.Value.ToUniversalTime()>now.UtcDateTime,
+            _userData.GetUserData(user,x)?.Played==true));
+        return SeasonInventory.From(observations);
+    }
+    private static IReadOnlyDictionary<string,string> ProviderIds(BaseItem item)=>(item.ProviderIds??new Dictionary<string,string>())
+        .Where(x=>!string.IsNullOrWhiteSpace(x.Value)).ToDictionary(x=>x.Key.ToLowerInvariant(),x=>x.Value);
     private static (Uri? Url,string Token) Configuration(){var c=Plugin.Instance?.Configuration;return(Uri.TryCreate(c?.WatchWeaverUrl,UriKind.Absolute,out var u)?u:null,c?.ConnectionToken??"");}
     private static string TargetAbi()=>Environment.Version.Major>=10?"12.0.0.0":"10.11.0.0";
 }
