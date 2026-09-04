@@ -4,7 +4,6 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WatchWeaver.Jellyfin.Capture;
@@ -29,8 +28,8 @@ public sealed class WatchWeaverHostedService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken ct)
     { while(!ct.IsCancellationRequested){try{if(_dispatcher is null||!await _dispatcher.DeliverOneAsync(DateTimeOffset.UtcNow,ct))await _wake.WaitAsync(TimeSpan.FromSeconds(5),ct);}catch(OperationCanceledException)when(ct.IsCancellationRequested){break;}catch(Exception ex){_log.LogWarning(ex,"WatchWeaver delivery cycle failed without exposing event data");await Task.Delay(TimeSpan.FromSeconds(15),ct);}} }
     private void OnUserDataSaved(object? sender,UserDataSaveEventArgs e)
-    { try{var user=_users.GetUserById(e.UserId);if(e.Item is not null&&user is not null&&IsManualPlayedChange(e.SaveReason,e.UserData.Played))Capture(e.Item,user,null,_correlation,"marked_played");}catch(Exception ex){_log.LogWarning(ex,"WatchWeaver manual watched-state capture failed");} }
-    internal static bool IsManualPlayedChange(UserDataSaveReason reason,bool played)=>played&&reason==UserDataSaveReason.TogglePlayed;
+    { try{var user=_users.GetUserById(e.UserId);if(e.Item is not null&&user is not null&&IsManualPlayedChange(e.SaveReason.ToString(),e.UserData.Played))Capture(e.Item,user,null,_correlation,"marked_played");}catch(Exception ex){_log.LogWarning(ex,"WatchWeaver manual watched-state capture failed");} }
+    internal static bool IsManualPlayedChange(string reason,bool played)=>played&&string.Equals(reason,"TogglePlayed",StringComparison.Ordinal);
     public async void Capture(BaseItem item,global::Jellyfin.Database.Implementations.Entities.User user,SessionInfo? session,EventCorrelation correlation,string type)
     {
         try
