@@ -13,7 +13,7 @@ The 12.0 target is kept explicit and is validated in CI against prerelease packa
 
 ## Configuration
 
-Install the ABI-appropriate artifact, restart Jellyfin, then open Dashboard → Plugins → WatchWeaver. Enter the WatchWeaver base URL, paste the one-time ingestion token, select specific Jellyfin users, and test the connection. Selected users currently share one WatchWeaver history.
+Install the ABI-appropriate artifact, restart Jellyfin, then open Dashboard → Plugins → WatchWeaver. Enter the WatchWeaver base URL, paste the one-time ingestion token, select users from the checklist, save, and test the connection. A saved token can be tested without pasting it again. Selected users currently share one WatchWeaver history.
 
 Private LAN/VPN destinations are allowed by default. Public destinations must use HTTPS. Tokens are write-only in the dashboard and are redacted from status and logs.
 
