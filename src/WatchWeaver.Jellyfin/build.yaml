@@ -1,6 +1,6 @@
 name: "WatchWeaver"
 guid: "5f36de72-9df2-4a06-b5e7-d55fe8f50158"
-version: "0.1.0.3"
+version: "0.1.0.4"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "thef4tdaddy"
@@ -9,4 +9,4 @@ description: "Durably sends selected users' completed movie and episode watches 
 category: "General"
 artifacts:
   - "WatchWeaver.Jellyfin.dll"
-changelog: "Fix manual mark-played capture and recovery delivery to WatchWeaver."
+changelog: "Retry recovery events safely after failed delivery and add privacy-safe capture diagnostics."
