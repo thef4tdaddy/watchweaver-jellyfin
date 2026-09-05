@@ -4,7 +4,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Model.Entities;
+using Jellyfin.Data.Enums;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WatchWeaver.Jellyfin.Capture;
