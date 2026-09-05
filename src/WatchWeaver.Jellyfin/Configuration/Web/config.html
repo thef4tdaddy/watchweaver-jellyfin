@@ -4,6 +4,7 @@
     <div class="inputContainer"><label class="inputLabel" for="WatchWeaverUrl">WatchWeaver URL</label><input is="emby-input" id="WatchWeaverUrl" type="url" required /></div>
     <div class="inputContainer"><label class="inputLabel" for="ConnectionToken">Connection token</label><input is="emby-input" id="ConnectionToken" type="password" autocomplete="new-password" placeholder="Leave blank to keep the saved token" /><div id="SavedTokenStatus" class="fieldDescription">Checking saved token…</div></div>
     <div class="verticalSection"><h3 class="sectionTitle">Users to sync</h3><div id="AllowedUsers"></div><div class="fieldDescription">Only completed watches from selected users are sent. Select no users to pause capture.</div></div>
+    <div class="verticalSection"><h3 class="sectionTitle">Recovery scan</h3><p class="fieldDescription">Every 15 minutes the plugin checks recent played-state changes for selected users. It can recover missed first watches and manual mark-played events. Jellyfin does not expose enough history to reconstruct older rewatches, so WatchWeaver never invents them.</p></div>
     <button is="emby-button" type="submit" class="raised button-submit block"><span>Save</span></button>
     <button is="emby-button" type="button" id="TestConnection" class="raised block"><span>Test connection</span></button>
     <pre id="WatchWeaverStatus" aria-live="polite"></pre>

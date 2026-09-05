@@ -29,6 +29,8 @@ Private LAN/VPN destinations are allowed by default. Public destinations must us
 
 Events are written to a bounded JSON queue before delivery. Transient failures, including `429` and `5xx`, retry with exponential backoff and `Retry-After`. Invalid/conflicting events enter a visible dead-letter list. Queue overflow is reported and the newest event is rejected rather than silently deleting older history. Playback stop and user-data signals are correlated into one stable event; real rewatches receive different event IDs.
 
+A periodic recovery scan checks recent played-state changes for selected users and catches missed first-watch or mark-played transitions. Jellyfin exposes current played state rather than a complete rewatch ledger, so reconciliation intentionally does not manufacture historical rewatches.
+
 ## Development
 
 ```sh
