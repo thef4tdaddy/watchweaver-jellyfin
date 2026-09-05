@@ -2,6 +2,8 @@
   const id = '5f36de72-9df2-4a06-b5e7-d55fe8f50158';
   const page = document.querySelector('#WatchWeaverConfigPage');
   let savedToken = '';
+  function showMode() { page.querySelector('#PushSettings').style.display = page.querySelector('#TransportMode').value === 'stream' ? 'none' : ''; }
+  page.querySelector('#TransportMode').addEventListener('change', showMode);
 
   function selectedUserIds() {
     return Array.from(page.querySelectorAll('#AllowedUsers input:checked')).map(input => input.value);
@@ -32,6 +34,8 @@
       ApiClient.getUsers(),
     ]);
     page.querySelector('#WatchWeaverUrl').value = configuration.WatchWeaverUrl || '';
+    page.querySelector('#TransportMode').value = configuration.TransportMode || 'push';
+    showMode();
     page.querySelector('#ConnectionToken').value = '';
     savedToken = configuration.ConnectionToken || '';
     page.querySelector('#SavedTokenStatus').textContent = savedToken ? 'A token is saved.' : 'No token is saved yet.';
@@ -44,6 +48,7 @@
     try {
       const configuration = await ApiClient.getPluginConfiguration(id);
       configuration.WatchWeaverUrl = page.querySelector('#WatchWeaverUrl').value.trim();
+      configuration.TransportMode = page.querySelector('#TransportMode').value;
       const enteredToken = page.querySelector('#ConnectionToken').value.trim();
       if (enteredToken) {
         configuration.ConnectionToken = enteredToken;
