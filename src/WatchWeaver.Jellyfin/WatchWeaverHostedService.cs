@@ -11,6 +11,7 @@ using WatchWeaver.Jellyfin.Capture;
 using WatchWeaver.Jellyfin.Delivery;
 using WatchWeaver.Jellyfin.Protocol;
 using WatchWeaver.Jellyfin.Queue;
+using WatchWeaver.Jellyfin.Streaming;
 
 namespace WatchWeaver.Jellyfin;
 public sealed class WatchWeaverHostedService : BackgroundService
@@ -18,17 +19,17 @@ public sealed class WatchWeaverHostedService : BackgroundService
     private readonly IServerApplicationHost _host; private readonly IApplicationPaths _paths;
     private readonly IUserDataManager _userData; private readonly IUserManager _users;
     private readonly ILibraryManager _library;
-    private readonly ILogger<WatchWeaverHostedService> _log; private readonly EventCorrelation _correlation;
+    private readonly ILogger<WatchWeaverHostedService> _log; private readonly EventCorrelation _correlation; private readonly EventBroadcaster _broadcaster;
     private readonly SemaphoreSlim _wake = new(0, 1);
     private OutboundQueue? _queue; private Dispatcher? _dispatcher; private ReconciliationState? _reconciliation;
     public static WatchWeaverHostedService? Instance { get; private set; }
-    public WatchWeaverHostedService(IServerApplicationHost host,IApplicationPaths paths,IUserDataManager userData,IUserManager users,ILibraryManager library,EventCorrelation correlation,ILogger<WatchWeaverHostedService> log)
-    { _host=host;_paths=paths;_userData=userData;_users=users;_library=library;_correlation=correlation;_log=log;Instance=this; }
+    public WatchWeaverHostedService(IServerApplicationHost host,IApplicationPaths paths,IUserDataManager userData,IUserManager users,ILibraryManager library,EventCorrelation correlation,EventBroadcaster broadcaster,ILogger<WatchWeaverHostedService> log)
+    { _host=host;_paths=paths;_userData=userData;_users=users;_library=library;_correlation=correlation;_broadcaster=broadcaster;_log=log;Instance=this; }
     public override async Task StartAsync(CancellationToken ct)
     { var folder=Path.Combine(_paths.PluginConfigurationsPath,"watchweaver");_queue=new(Path.Combine(folder,"outbound-queue.json"),Plugin.Instance?.Configuration.QueueCapacity??10000);await _queue.LoadAsync(ct);_reconciliation=new(Path.Combine(folder,"reconciliation-state-v2.json"));await _reconciliation.LoadAsync(ct);_dispatcher=new(new HttpClient{Timeout=TimeSpan.FromSeconds(20)},_queue,Configuration);_userData.UserDataSaved+=OnUserDataSaved;_log.LogInformation("WatchWeaver capture service started; selected_users={SelectedUsers}",Plugin.Instance?.Configuration.AllowedUserIds.Length??0);await base.StartAsync(ct); }
     public override Task StopAsync(CancellationToken ct){_userData.UserDataSaved-=OnUserDataSaved;return base.StopAsync(ct);}
     protected override async Task ExecuteAsync(CancellationToken ct)
-    { var nextProbe=DateTimeOffset.MinValue;var nextReconciliation=DateTimeOffset.UtcNow.AddMinutes(1);while(!ct.IsCancellationRequested){try{var now=DateTimeOffset.UtcNow;if(_dispatcher is not null&&now>=nextProbe){await _dispatcher.ProbeAsync(_host.ApplicationVersionString,typeof(Plugin).Assembly.GetName().Version?.ToString()??"0.1.0",ct);nextProbe=now.AddMinutes(5);}if(now>=nextReconciliation){await ReconcileAsync(now,ct);nextReconciliation=now.AddMinutes(Math.Clamp(Plugin.Instance?.Configuration.ReconciliationIntervalMinutes??15,5,1440));}if(_dispatcher is null||!await _dispatcher.DeliverOneAsync(now,ct))await _wake.WaitAsync(TimeSpan.FromSeconds(5),ct);}catch(OperationCanceledException)when(ct.IsCancellationRequested){break;}catch(Exception ex){_log.LogWarning(ex,"WatchWeaver delivery cycle failed without exposing event data");await Task.Delay(TimeSpan.FromSeconds(15),ct);}} }
+    { var nextProbe=DateTimeOffset.MinValue;var nextReconciliation=DateTimeOffset.UtcNow.AddMinutes(1);while(!ct.IsCancellationRequested){try{var now=DateTimeOffset.UtcNow;var push=Plugin.Instance?.Configuration.TransportMode is not "stream";if(push&&_dispatcher is not null&&now>=nextProbe){await _dispatcher.ProbeAsync(_host.ApplicationVersionString,typeof(Plugin).Assembly.GetName().Version?.ToString()??"0.1.0",ct);nextProbe=now.AddMinutes(5);}if(now>=nextReconciliation){await ReconcileAsync(now,ct);nextReconciliation=now.AddMinutes(Math.Clamp(Plugin.Instance?.Configuration.ReconciliationIntervalMinutes??15,5,1440));}if(!push||_dispatcher is null||!await _dispatcher.DeliverOneAsync(now,ct))await _wake.WaitAsync(TimeSpan.FromSeconds(5),ct);}catch(OperationCanceledException)when(ct.IsCancellationRequested){break;}catch(Exception ex){_log.LogWarning(ex,"WatchWeaver delivery cycle failed without exposing event data");await Task.Delay(TimeSpan.FromSeconds(15),ct);}} }
     private async Task ReconcileAsync(DateTimeOffset now,CancellationToken ct)
     {
         var cfg=Plugin.Instance?.Configuration;var state=_reconciliation;if(cfg is null||state is null)return;var lookback=TimeSpan.FromHours(Math.Clamp(cfg.ReconciliationLookbackHours,1,168));
@@ -49,8 +50,10 @@ public sealed class WatchWeaverHostedService : BackgroundService
             var runtime=item.RunTimeTicks.GetValueOrDefault();
             var progress=runtime>0?100d*data.PlaybackPositionTicks/runtime:data.Played?100:0;
             var envelope=new EventEnvelope(1,eventId,type,now,new(_host.SystemId,_host.ApplicationVersionString),new(typeof(Plugin).Assembly.GetName().Version?.ToString()??"0.1.0",TargetAbi()),new(user.Id.ToString(),user.Username),BuildItem(item,user,now),new(true,data.PlaybackPositionTicks,item.RunTimeTicks,progress,data.PlayCount,session?.Client,session?.DeviceName));
-            if(!await queue.EnqueueAsync(envelope))_log.LogError("WatchWeaver outbound queue is full; event was not accepted into the queue");
-            else {if(_reconciliation is not null)await _reconciliation.RecordAsync(user.Id.ToString(),item.Id.ToString(),data.PlayCount,AsUtc(data.LastPlayedDate),ct);_log.LogInformation("WatchWeaver event queued; event_type={EventType} item_type={ItemType} event_id={EventId}",type,envelope.Item.Type,eventId);if(_wake.CurrentCount==0)_wake.Release();}
+            var subscribers=_broadcaster.Publish(envelope);
+            var queued=cfg.TransportMode is not "stream";
+            if(queued&&!await queue.EnqueueAsync(envelope))_log.LogError("WatchWeaver outbound queue is full; event was not accepted into the queue");
+            else {if(_reconciliation is not null)await _reconciliation.RecordAsync(user.Id.ToString(),item.Id.ToString(),data.PlayCount,AsUtc(data.LastPlayedDate),ct);_log.LogInformation("WatchWeaver event captured; event_type={EventType} item_type={ItemType} event_id={EventId} stream_subscribers={Subscribers} push_queued={PushQueued}",type,envelope.Item.Type,eventId,subscribers,queued);if(queued&&_wake.CurrentCount==0)_wake.Release();}
         }
         catch(Exception ex){_log.LogWarning(ex,"WatchWeaver event capture failed without exposing event data");}
     }
