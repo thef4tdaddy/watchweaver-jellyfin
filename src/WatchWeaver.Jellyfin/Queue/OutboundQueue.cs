@@ -4,7 +4,7 @@ using WatchWeaver.Jellyfin.Protocol;
 namespace WatchWeaver.Jellyfin.Queue;
 public sealed record QueueEntry(EventEnvelope Event,int Attempts,DateTimeOffset NextAttempt,string? LastCode=null);
 public sealed record DeadLetter(EventEnvelope Event,string Code,DateTimeOffset FailedAt);
-public sealed record QueueStatus(int Pending,int DeadLetters,long OverflowCount,DateTimeOffset? OldestPendingAt,DateTimeOffset? LastDeliveredAt,string? LastErrorCode);
+public sealed record QueueStatus(int Pending,int DeadLetters,long OverflowCount,DateTimeOffset? OldestPendingAt,DateTimeOffset? LastDeliveredAt,string? LastErrorCode,DateTimeOffset? LastProbeAt,string? LastProbeErrorCode);
 public sealed class OutboundQueue
 {
     private readonly string _path; private readonly int _capacity; private readonly SemaphoreSlim _gate=new(1,1);
@@ -17,8 +17,10 @@ public sealed class OutboundQueue
     public Task DeliveredAsync(string id,CancellationToken ct=default)=>Mutate(id,e=>{_state.Pending.Remove(e);_state.LastDeliveredAt=DateTimeOffset.UtcNow;_state.LastErrorCode=null;},ct);
     public Task RetryAsync(string id,DateTimeOffset next,string code,CancellationToken ct=default)=>Mutate(id,e=>{var i=_state.Pending.IndexOf(e);_state.Pending[i]=e with{Attempts=e.Attempts+1,NextAttempt=next,LastCode=code};_state.LastErrorCode=code;},ct);
     public Task DeadLetterAsync(string id,string code,CancellationToken ct=default)=>Mutate(id,e=>{_state.Pending.Remove(e);_state.DeadLetters.Add(new(e.Event,code,DateTimeOffset.UtcNow));_state.LastErrorCode=code;},ct);
-    public async Task<QueueStatus> StatusAsync(CancellationToken ct=default){await _gate.WaitAsync(ct);try{return new(_state.Pending.Count,_state.DeadLetters.Count,_state.OverflowCount,_state.Pending.Count==0?null:_state.Pending.Min(x=>x.Event.OccurredAt),_state.LastDeliveredAt,_state.LastErrorCode);}finally{_gate.Release();}}
+    public Task ProbeAsync(bool successful,string? code,CancellationToken ct=default)=>MutateState(()=>{_state.LastProbeAt=DateTimeOffset.UtcNow;_state.LastProbeErrorCode=successful?null:code;},ct);
+    public async Task<QueueStatus> StatusAsync(CancellationToken ct=default){await _gate.WaitAsync(ct);try{return new(_state.Pending.Count,_state.DeadLetters.Count,_state.OverflowCount,_state.Pending.Count==0?null:_state.Pending.Min(x=>x.Event.OccurredAt),_state.LastDeliveredAt,_state.LastErrorCode,_state.LastProbeAt,_state.LastProbeErrorCode);}finally{_gate.Release();}}
     private async Task Mutate(string id,Action<QueueEntry> action,CancellationToken ct){await _gate.WaitAsync(ct);try{var e=_state.Pending.FirstOrDefault(x=>x.Event.EventId==id);if(e is not null){action(e);await Save(ct);}}finally{_gate.Release();}}
+    private async Task MutateState(Action action,CancellationToken ct){await _gate.WaitAsync(ct);try{action();await Save(ct);}finally{_gate.Release();}}
     private async Task Save(CancellationToken ct){Directory.CreateDirectory(Path.GetDirectoryName(_path)!);var tmp=_path+".tmp";await using(var s=File.Create(tmp)){await JsonSerializer.SerializeAsync(s,_state,Json,ct);await s.FlushAsync(ct);}File.Move(tmp,_path,true);}
-    public sealed class State{public List<QueueEntry> Pending{get;set;}=[];public List<DeadLetter> DeadLetters{get;set;}=[];public long OverflowCount{get;set;}public DateTimeOffset? LastDeliveredAt{get;set;}public string? LastErrorCode{get;set;}}
+    public sealed class State{public List<QueueEntry> Pending{get;set;}=[];public List<DeadLetter> DeadLetters{get;set;}=[];public long OverflowCount{get;set;}public DateTimeOffset? LastDeliveredAt{get;set;}public string? LastErrorCode{get;set;}public DateTimeOffset? LastProbeAt{get;set;}public string? LastProbeErrorCode{get;set;}}
 }
