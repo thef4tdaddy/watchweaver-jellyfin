@@ -1,6 +1,7 @@
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.Entities.TV;
@@ -36,8 +37,9 @@ public sealed class WatchWeaverHostedService : BackgroundService
         var scanned=0;var recovered=0;foreach(var userId in cfg.AllowedUserIds){if(!Guid.TryParse(userId,out var id))continue;var user=_users.GetUserById(id);if(user is null)continue;var items=_library.GetItemList(new InternalItemsQuery(user){Recursive=true,IncludeItemTypes=[BaseItemKind.Movie,BaseItemKind.Episode]});foreach(var item in items){scanned++;var data=_userData.GetUserData(user,item);if(data?.Played!=true)continue;var last=AsUtc(data.LastPlayedDate);if(await state.ShouldCaptureAsync(userId,item.Id.ToString(),data.PlayCount,last,now,lookback,ct)){await CaptureAsync(item,user,null,_correlation,"marked_played",last??now,ct);recovered++;}}}_log.LogInformation("WatchWeaver recovery scan completed; scanned={Scanned} recovered={Recovered}",scanned,recovered);
     }
     private void OnUserDataSaved(object? sender,UserDataSaveEventArgs e)
-    { try{var user=_users.GetUserById(e.UserId);var selected=Plugin.Instance?.Configuration.AllowedUserIds.Contains(e.UserId.ToString(),StringComparer.OrdinalIgnoreCase)==true;if(e.UserData.Played)_log.LogInformation("WatchWeaver played-state signal; reason={Reason} item_type={ItemType} selected_user={SelectedUser}",e.SaveReason,e.Item?.GetType().Name??"unknown",selected);if(e.Item is not null&&user is not null&&IsManualPlayedChange(e.SaveReason.ToString(),e.UserData.Played))Capture(e.Item,user,null,_correlation,"marked_played");}catch(Exception ex){_log.LogWarning(ex,"WatchWeaver manual watched-state capture failed");} }
-    internal static bool IsManualPlayedChange(string reason,bool played)=>played&&(string.Equals(reason,"TogglePlayed",StringComparison.Ordinal)||string.Equals(reason,"UpdateUserData",StringComparison.Ordinal));
+    { try{var user=_users.GetUserById(e.UserId);var selected=Plugin.Instance?.Configuration.AllowedUserIds.Contains(e.UserId.ToString(),StringComparer.OrdinalIgnoreCase)==true;if(e.UserData.Played)_log.LogInformation("WatchWeaver played-state signal; reason={Reason} item_type={ItemType} selected_user={SelectedUser}",e.SaveReason,e.Item?.GetType().Name??"unknown",selected);if(e.Item is not null&&user is not null&&IsCompletedUserDataChange(e.SaveReason.ToString(),e.UserData.Played)&&IsTrackable(e.Item))Capture(e.Item,user,null,_correlation,"marked_played");}catch(Exception ex){_log.LogWarning(ex,"WatchWeaver manual watched-state capture failed");} }
+    internal static bool IsCompletedUserDataChange(string reason,bool played)=>played&&!string.Equals(reason,"PlaybackProgress",StringComparison.OrdinalIgnoreCase);
+    private static bool IsTrackable(BaseItem item)=>item is Movie or Episode;
     public async void Capture(BaseItem item,global::Jellyfin.Database.Implementations.Entities.User user,SessionInfo? session,EventCorrelation correlation,string type)=>await CaptureAsync(item,user,session,correlation,type,DateTimeOffset.UtcNow,CancellationToken.None);
     private async Task CaptureAsync(BaseItem item,global::Jellyfin.Database.Implementations.Entities.User user,SessionInfo? session,EventCorrelation correlation,string type,DateTimeOffset now,CancellationToken ct)
     {
@@ -46,6 +48,8 @@ public sealed class WatchWeaverHostedService : BackgroundService
             var cfg=Plugin.Instance?.Configuration;var queue=_queue;
             if(cfg is null||queue is null||!cfg.AllowedUserIds.Contains(user.Id.ToString(),StringComparer.OrdinalIgnoreCase))return;
             var data=_userData.GetUserData(user,item);if(data is null)return;
+            var lastPlayed=AsUtc(data.LastPlayedDate);
+            if(lastPlayed.HasValue&&_reconciliation is not null&&!await _reconciliation.ShouldCaptureAsync(user.Id.ToString(),item.Id.ToString(),data.PlayCount,lastPlayed,now,TimeSpan.FromHours(Math.Clamp(cfg.ReconciliationLookbackHours,1,168)),ct)){_log.LogDebug("WatchWeaver event ignored as already captured; event_type={EventType} item_type={ItemType}",type,item.GetType().Name);return;}
             var eventId=correlation.GetEventId(_host.SystemId,user.Id.ToString(),item.Id.ToString(),data.PlayCount,now,type);
             var runtime=item.RunTimeTicks.GetValueOrDefault();
             var progress=runtime>0?100d*data.PlaybackPositionTicks/runtime:data.Played?100:0;
@@ -53,7 +57,7 @@ public sealed class WatchWeaverHostedService : BackgroundService
             var subscribers=_broadcaster.Publish(envelope);
             var queued=cfg.TransportMode is not "stream";
             if(queued&&!await queue.EnqueueAsync(envelope))_log.LogError("WatchWeaver outbound queue is full; event was not accepted into the queue");
-            else {if(_reconciliation is not null)await _reconciliation.RecordAsync(user.Id.ToString(),item.Id.ToString(),data.PlayCount,AsUtc(data.LastPlayedDate),ct);_log.LogInformation("WatchWeaver event captured; event_type={EventType} item_type={ItemType} event_id={EventId} stream_subscribers={Subscribers} push_queued={PushQueued}",type,envelope.Item.Type,eventId,subscribers,queued);if(queued&&_wake.CurrentCount==0)_wake.Release();}
+            else {if(_reconciliation is not null)await _reconciliation.RecordAsync(user.Id.ToString(),item.Id.ToString(),data.PlayCount,lastPlayed,ct);_log.LogInformation("WatchWeaver event captured; event_type={EventType} item_type={ItemType} event_id={EventId} stream_subscribers={Subscribers} push_queued={PushQueued}",type,envelope.Item.Type,eventId,subscribers,queued);if(queued&&_wake.CurrentCount==0)_wake.Release();}
         }
         catch(Exception ex){_log.LogWarning(ex,"WatchWeaver event capture failed without exposing event data");}
     }
