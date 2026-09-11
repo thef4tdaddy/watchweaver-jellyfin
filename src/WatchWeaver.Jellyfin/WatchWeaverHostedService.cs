@@ -1,5 +1,6 @@
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller;
+using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
@@ -18,14 +19,15 @@ namespace WatchWeaver.Jellyfin;
 public sealed class WatchWeaverHostedService : BackgroundService
 {
     private readonly IServerApplicationHost _host; private readonly IApplicationPaths _paths;
+    private readonly IServerConfigurationManager _serverConfiguration;
     private readonly IUserDataManager _userData; private readonly IUserManager _users;
     private readonly ILibraryManager _library;
     private readonly ILogger<WatchWeaverHostedService> _log; private readonly EventCorrelation _correlation; private readonly EventBroadcaster _broadcaster;
     private readonly SemaphoreSlim _wake = new(0, 1);
     private OutboundQueue? _queue; private Dispatcher? _dispatcher; private ReconciliationState? _reconciliation;
     public static WatchWeaverHostedService? Instance { get; private set; }
-    public WatchWeaverHostedService(IServerApplicationHost host,IApplicationPaths paths,IUserDataManager userData,IUserManager users,ILibraryManager library,EventCorrelation correlation,EventBroadcaster broadcaster,ILogger<WatchWeaverHostedService> log)
-    { _host=host;_paths=paths;_userData=userData;_users=users;_library=library;_correlation=correlation;_broadcaster=broadcaster;_log=log;Instance=this; }
+    public WatchWeaverHostedService(IServerApplicationHost host,IApplicationPaths paths,IServerConfigurationManager serverConfiguration,IUserDataManager userData,IUserManager users,ILibraryManager library,EventCorrelation correlation,EventBroadcaster broadcaster,ILogger<WatchWeaverHostedService> log)
+    { _host=host;_paths=paths;_serverConfiguration=serverConfiguration;_userData=userData;_users=users;_library=library;_correlation=correlation;_broadcaster=broadcaster;_log=log;Instance=this; }
     public override async Task StartAsync(CancellationToken ct)
     { var folder=Path.Combine(_paths.PluginConfigurationsPath,"watchweaver");_queue=new(Path.Combine(folder,"outbound-queue.json"),Plugin.Instance?.Configuration.QueueCapacity??10000);await _queue.LoadAsync(ct);_reconciliation=new(Path.Combine(folder,"reconciliation-state-v2.json"));await _reconciliation.LoadAsync(ct);_dispatcher=new(new HttpClient{Timeout=TimeSpan.FromSeconds(20)},_queue,Configuration);_userData.UserDataSaved+=OnUserDataSaved;_log.LogInformation("WatchWeaver capture service started; selected_users={SelectedUsers}",Plugin.Instance?.Configuration.AllowedUserIds.Length??0);await base.StartAsync(ct); }
     public override Task StopAsync(CancellationToken ct){_userData.UserDataSaved-=OnUserDataSaved;return base.StopAsync(ct);}
@@ -56,7 +58,7 @@ public sealed class WatchWeaverHostedService : BackgroundService
             var eventId=correlation.GetEventId(_host.SystemId,canonicalUserId,item.Id.ToString(),data.PlayCount,now,type);
             var runtime=item.RunTimeTicks.GetValueOrDefault();
             var progress=runtime>0?100d*data.PlaybackPositionTicks/runtime:data.Played?100:0;
-            var envelope=new EventEnvelope(1,eventId,type,now,new(_host.SystemId,_host.ApplicationVersionString),new(typeof(Plugin).Assembly.GetName().Version?.ToString()??"0.1.0",TargetAbi()),new(canonicalUserId,user.Username),BuildItem(item,user,now),new(true,data.PlaybackPositionTicks,item.RunTimeTicks,progress,data.PlayCount,session?.Client,session?.DeviceName));
+            var envelope=new EventEnvelope(1,eventId,type,now,new(_host.SystemId,_host.ApplicationVersionString,_serverConfiguration.Configuration.ServerName),new(typeof(Plugin).Assembly.GetName().Version?.ToString()??"0.1.0",TargetAbi()),new(canonicalUserId,user.Username),BuildItem(item,user,now),new(true,data.PlaybackPositionTicks,item.RunTimeTicks,progress,data.PlayCount,session?.Client,session?.DeviceName));
             var subscribers=_broadcaster.Publish(envelope);
             var queued=cfg.TransportMode is not "stream";
             if(queued&&!await queue.EnqueueAsync(envelope))_log.LogError("WatchWeaver outbound queue is full; event was not accepted into the queue");

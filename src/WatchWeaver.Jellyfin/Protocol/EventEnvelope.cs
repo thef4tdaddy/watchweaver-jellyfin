@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 
 namespace WatchWeaver.Jellyfin.Protocol;
-public sealed record ServerInfo([property:JsonPropertyName("id")] string Id,[property:JsonPropertyName("version")] string Version);
+public sealed record ServerInfo([property:JsonPropertyName("id")] string Id,[property:JsonPropertyName("version")] string Version,[property:JsonPropertyName("name")] string? Name=null);
 public sealed record PluginInfo([property:JsonPropertyName("version")] string Version,[property:JsonPropertyName("target_abi")] string TargetAbi);
 public sealed record UserInfo([property:JsonPropertyName("id")] string Id,[property:JsonPropertyName("name")] string? Name=null);
 public sealed record ItemInfo(
