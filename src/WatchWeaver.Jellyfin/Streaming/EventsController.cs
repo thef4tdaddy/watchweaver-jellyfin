@@ -21,7 +21,8 @@ public sealed class EventsController(EventBroadcaster broadcaster, ILogger<Event
         Response.Headers.Connection = "keep-alive";
 
         var (id, reader) = broadcaster.Subscribe();
-        log.LogInformation("WatchWeaver event-stream client connected; subscriber_count={SubscriberCount}", broadcaster.SubscriberCount);
+        if (Plugin.Instance?.Configuration.DebugLogging == true)
+            log.LogInformation("WatchWeaver debug: event-stream client connected; subscriber_count={SubscriberCount}", broadcaster.SubscriberCount);
         try
         {
             await WriteFrameAsync("hello", new
@@ -51,7 +52,8 @@ public sealed class EventsController(EventBroadcaster broadcaster, ILogger<Event
         finally
         {
             broadcaster.Unsubscribe(id);
-            log.LogInformation("WatchWeaver event-stream client disconnected; subscriber_count={SubscriberCount}", broadcaster.SubscriberCount);
+            if (Plugin.Instance?.Configuration.DebugLogging == true)
+                log.LogInformation("WatchWeaver debug: event-stream client disconnected; subscriber_count={SubscriberCount}", broadcaster.SubscriberCount);
         }
     }
 
