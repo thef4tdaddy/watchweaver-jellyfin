@@ -1,6 +1,6 @@
 name: "WatchWeaver"
 guid: "5f36de72-9df2-4a06-b5e7-d55fe8f50158"
-version: "0.1.0.11"
+version: "0.1.0.12"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "thef4tdaddy"
@@ -9,4 +9,4 @@ description: "Streams or durably sends selected users' completed movie and episo
 category: "General"
 artifacts:
   - "WatchWeaver.Jellyfin.dll"
-changelog: "Include the configured Jellyfin instance name with watch events so WatchWeaver can distinguish multiple servers."
+changelog: "Add quiet normal logging and an opt-in, privacy-safe debug mode for connection troubleshooting."
