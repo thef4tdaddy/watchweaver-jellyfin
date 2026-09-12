@@ -9,5 +9,6 @@ public sealed class PluginConfiguration:BasePluginConfiguration
     public int QueueCapacity{get;set;}=10000;
     public int ReconciliationIntervalMinutes{get;set;}=15;
     public int ReconciliationLookbackHours{get;set;}=24;
+    public bool DebugLogging{get;set;}=false;
     public string RedactedToken=>string.IsNullOrEmpty(ConnectionToken)?"":"••••••••";
 }

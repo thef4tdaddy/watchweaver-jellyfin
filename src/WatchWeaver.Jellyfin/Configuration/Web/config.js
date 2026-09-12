@@ -35,6 +35,7 @@
     ]);
     page.querySelector('#WatchWeaverUrl').value = configuration.WatchWeaverUrl || '';
     page.querySelector('#TransportMode').value = configuration.TransportMode || 'push';
+    page.querySelector('#DebugLogging').checked = configuration.DebugLogging === true;
     showMode();
     page.querySelector('#ConnectionToken').value = '';
     savedToken = configuration.ConnectionToken || '';
@@ -55,6 +56,7 @@
         savedToken = enteredToken;
       }
       configuration.AllowedUserIds = selectedUserIds();
+      configuration.DebugLogging = page.querySelector('#DebugLogging').checked;
       const result = await ApiClient.updatePluginConfiguration(id, configuration);
       page.querySelector('#ConnectionToken').value = '';
       page.querySelector('#SavedTokenStatus').textContent = savedToken ? 'A token is saved.' : 'No token is saved yet.';

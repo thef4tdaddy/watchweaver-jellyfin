@@ -31,6 +31,10 @@ Events are written to a bounded JSON queue before delivery. Transient failures, 
 
 A periodic recovery scan checks recent played-state changes for selected users and catches missed first-watch or mark-played transitions. Jellyfin exposes current played state rather than a complete rewatch ledger, so reconciliation intentionally does not manufacture historical rewatches.
 
+## Logging and diagnostics
+
+Normal plugin logs record startup, captured watches, recovered watches, queue overflow, and actionable failures. Routine stream reconnects, played-state signals, and empty recovery scans are intentionally quiet. Enable **temporary debug logging** on the plugin configuration page to include those details while diagnosing a connection, then turn it off again. Debug logging still omits tokens, WatchWeaver URLs, user names, media titles, and raw payloads.
+
 ## Development
 
 ```sh
